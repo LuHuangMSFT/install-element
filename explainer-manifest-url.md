@@ -294,14 +294,14 @@ that fails to fetch or parse, etc.) are **not** surfaced here. They are reported
 
 ### Post-activation: `InstallResultEvent`
 
-Outcomes that occur *after* the user clicks are surfaced via a dedicated
-`installresult` event, an `InstallResultEvent` whose `result` attribute reports
-one of three values:
+Outcomes that occur *after* the user clicks are surfaced by a dedicated event
+named `installresult`. Its event object is an `InstallResultEvent`, which
+carries a `result` attribute reporting one of three values:
 
 | `result`         | Meaning |
 |------------------|---------|
 | `"success"`      | The app was installed. |
-| `"aborted"`      | The user or user agent cancelled the install. |
+| `"aborted"`      | The user cancelled, or a browser-side condition prevented the install from completing. No action needed. |
 | `"invalid_data"` | A developer error: the element was given install data it can't act on. See note below. |
 
 > **Note:** `"invalid_data"` is a developer error, not a user action. It covers
@@ -338,10 +338,10 @@ const el = document.querySelector('install');
 el.addEventListener('installresult', (event) => {
   switch (event.result) {
     case 'success':
-      // The user accepted the install or launch dialog.
+      // The user accepted the install (the UA should take a reasonable action, such as launching, if the app is already installed).
       break;
     case 'aborted':
-      // The user (or user agent) cancelled.
+      // The user cancelled, or a browser-side condition stopped the install. No action needed.
       break;
     case 'invalid_data':
       // The manifest / manifestId was invalid. Fix the attributes and retry.
