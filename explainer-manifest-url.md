@@ -28,7 +28,7 @@ in developing collaborative solutions fit for standardization.
 - [User-Facing Problem](#user-facing-problem)
 - [Use Cases](#use-cases)
 - [Proposed Approach](#proposed-approach)  
-- [Error handling / debuggability](#error-handling--debuggability)
+- [Results, errors, and debuggability](#results-errors-and-debuggability)
 - [Alternatives Considered](#alternatives-considered)
 - [Open Questions](#open-questions)
 - [Accessibility, Localization, Privacy, and Security Considerations](#accessibility-localization-privacy-and-security-considerations)
@@ -197,9 +197,9 @@ the user agent:
 ### Element attributes
 
 - `manifest` -- URL of the web app manifest to install.
-- `applicationId` -- The manifest id of the app to install.
+- `manifestId` -- The manifest id of the app to install.
 
-Both attributes are optional. The developer may omit `applicationId`, if and
+Both attributes are optional. The developer may omit `manifestId`, if and
 only if the JSON at `manifest` contains an `id` field.
 
 As an added convenience, the developer may omit `manifest`, in which case the
@@ -216,7 +216,7 @@ currently loaded page's manifest is targeted for install.
 
 <!-- Install a specific app whose manifest does not declare an `id` -->
 <install manifest="https://app.example.com/manifest.webmanifest"
-         applicationId="https://app.example.com/?source=catalog"></install>
+         manifestId="https://app.example.com/?source=catalog"></install>
 ```
 
 ### Element fallback content
@@ -227,7 +227,7 @@ If the user agent doesn't support installation, fallback content can be rendered
 
 ```html
 <install manifest="https://music.youtube.com/manifest.webmanifest"
-         applicationId="https://music.youtube.com/?source=pwa">
+         manifestId="https://music.youtube.com/?source=pwa">
   <a href="https://music.youtube.com/" target="_blank">
     Launch YouTube Music
   </a>
@@ -237,7 +237,7 @@ If the user agent doesn't support installation, fallback content can be rendered
 ### Activation behavior
 
 On activation, the element invokes the install algorithm defined in
-[Web Install API][api] with the optionally supplied `manifest` and `applicationId`.
+[Web Install API][api] with the optionally supplied `manifest` and `manifestId`.
 The backend's algorithms for manifest fetch, validation, consent UI, and error
 mapping apply unchanged.
 
@@ -248,8 +248,9 @@ name, origin, and icon before installation proceeds:
 
 Where `navigator.install()` uses promise rejections with `DOMException` names,
 the `<install>` element surfaces outcomes through two mechanisms: pre-click
-validation via the [InPagePermissionMixin][mixin], and post-click results via
-`InstallResultEvent` (see [Error handling](#error-handling--debuggability) below).
+validation via the [InPagePermissionMixin][mixin], and post-click results via an
+asynchronous, bubbling `InstallResultEvent` (see
+[Results, errors, and debuggability](#results-errors-and-debuggability) below).
 
 ### What if the app is already installed?
 
@@ -270,7 +271,7 @@ that answers the question *"am I in an installed app window?"* that allows
 developers to easily customize the look and feel of their installed app experience.
 
 
-## Error handling / debuggability
+## Results, errors, and debuggability
 
 The element surfaces errors through two distinct mechanisms, reflecting the
 difference between pre-activation validation and post-activation installation results.
@@ -283,29 +284,97 @@ interface (`isValid`, `invalidReason`, `onvalidationstatuschange`) from the
 common to all capability elements (visibility, styling, occlusion, temporal
 cooldowns) and are not install-specific.
 
-A violation of these restrictions prevent the element from being activated
-(either temporarily or permanently) and surface as an error in the
+A violation of these restrictions prevents the element from being activated
+(either temporarily or permanently) and surfaces as an error in the
 Developer Tools > Issues tab.
+
+Install-data problems (a malformed `manifest` URL or `manifestId`, a manifest
+that fails to fetch or parse, etc.) are **not** surfaced here. They are reported
+*after* activation as an `"invalid_data"` `installresult` (see below).
 
 ### Post-activation: `InstallResultEvent`
 
-Errors and outcomes that occur *after* the user clicks (manifest fetch failures,
-parse errors, `applicationId` doesn't match the UA-computed id, user cancellation,
-success) are surfaced via a dedicated `InstallResultEvent`. The result is a
-property on the event object -- not on the element -- because the install flow
-is asynchronous and a result tied to the element could be overwritten by a
-subsequent attempt before the handler runs.
+Outcomes that occur *after* the user clicks are surfaced via a dedicated
+`installresult` event, an `InstallResultEvent` whose `result` attribute reports
+one of three values:
+
+| `result`         | Meaning |
+|------------------|---------|
+| `"success"`      | The app was installed. |
+| `"aborted"`      | The user or user agent cancelled the install. |
+| `"invalid_data"` | A developer error: the element was given install data it can't act on. See note below. |
+
+> **Note:** `"invalid_data"` is a developer error, not a user action. It covers
+> a malformed `manifest` URL or `manifestId`, a manifest that can't be fetched or
+> parsed, a `manifestId` that doesn't match the UA-computed id, or a `manifestId`
+> with no `manifest` to install from. It does **not** disable the element: the
+> developer can correct the markup and the user can retry. (An earlier design
+> disabled the element and surfaced an `install_data_invalid` `invalidReason`;
+> that behavior was removed in favor of the `installresult` event.)
+
+```webidl
+enum InstallResult { "success", "aborted", "invalid_data" };
+
+[RuntimeEnabled=InstallElement, Exposed=Window]
+interface InstallResultEvent : Event {
+  constructor(DOMString type, optional InstallResultEventInit eventInitDict = {});
+  readonly attribute InstallResult result;
+};
+
+dictionary InstallResultEventInit : EventInit {
+  InstallResult result;
+};
+```
+
+The result is on the **event**, not the element, because the install flow is
+asynchronous. A result on the element could be overwritten by a later attempt
+before the handler runs. The event is enqueued for async dispatch so timing
+stays consistent across all outcome paths.
+
+Developers can listen with `addEventListener`:
 
 ```js
-element.addEventListener('installresult', (event) => {
-  console.log(event.result);
+const el = document.querySelector('install');
+el.addEventListener('installresult', (event) => {
+  switch (event.result) {
+    case 'success':
+      // The user accepted the install or launch dialog.
+      break;
+    case 'aborted':
+      // The user (or user agent) cancelled.
+      break;
+    case 'invalid_data':
+      // The manifest / manifestId was invalid. Fix the attributes and retry.
+      break;
+  }
 });
 ```
 
-The exact set of result values exposed to the installing origin is under
-discussion — see the [Web Install API's privacy section][api-privacy].
+The `oninstallresult` content attribute works too:
 
-[api-privacy]: https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/main/WebInstall/explainer.md#what-result-information-should-be-exposed-to-the-caller
+```html
+<install manifest="https://app.example.com/manifest.webmanifest"
+         oninstallresult="report(event.result)"></install>
+```
+
+As does the matching IDL property (`el.oninstallresult = ...`).
+
+When the user agent dispatches `installresult` it sets `bubbles = true`, so a
+page with several `<install>` elements can subscribe once on a common ancestor
+and read `event.target` to tell them apart.
+
+```js
+// One delegated listener on the catalog container handles every <install>
+// inside it; event.target identifies which app the result belongs to.
+document.getElementById('app-catalog').addEventListener('installresult', (event) => {
+  console.log(`${event.target.id}: ${event.result}`);
+});
+```
+
+The initial `result` set is deliberately coarse and may be refined over time
+(e.g. narrowing `"aborted"` to specifically mean user cancellation). How much a
+cross-origin installer should learn about an outcome is tracked in
+[Open Questions](#what-result-information-should-be-exposed-to-the-installing-origin).
 
 ## Alternatives Considered
 
@@ -387,9 +456,9 @@ considerations they use [elsewhere][url-display] for displaying origins and name
 
 The `InstallResultEvent` result values and `navigator.install()` promise rejections
 share the same underlying question: how much should the installing origin learn
-about the outcome of an install attempt — particularly in the cross-origin case?
+about the outcome of an install attempt, particularly in the cross-origin case?
 
-This is a shared backend concern. See the [Web Install API explainer's privacy section][api-privacy]
+This is a shared backend concern. See the [Web Install API explainer's privacy section][api-privacy].
 
 [api-privacy]: https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/main/WebInstall/explainer.md#what-result-information-should-be-exposed-to-the-caller
 
