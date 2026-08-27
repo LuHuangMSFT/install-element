@@ -232,16 +232,8 @@ await navigator.install({
       </section>
     </section>
 
-    <section id="conformance">
-      <h2>Conformance, dependencies, and terminology</h2>
-
-      <p>
-        The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, and MAY in
-        this document are to be interpreted as described in
-        [[!RFC2119]] and [[!RFC8174]] when, and only when, they appear in all
-        capitals.
-      </p>
-
+    <section id="dependencies">
+      <h2>Dependencies</h2>
       <p>
         This specification extends [[!HTML]] with {{Navigator/install()}} and
         the <code>&lt;<a data-link-type="element">install</a>&gt;</code>
@@ -280,7 +272,10 @@ await navigator.install({
         algorithm, that dependency must be made normative at the exact point of
         use.
       </p>
+    </section>
 
+    <section id="terminology">
+      <h2>Terminology</h2>
       <p>
         A user agent that does not support web application installation on a
         particular platform or profile is not required to expose these entry
@@ -2228,6 +2223,8 @@ dictionary InstallResultEventInit : EventInit {
         the associated Web Platform Tests.
       </p>
     </section>
+
+    <section id="conformance"></section>
 
     <section class="appendix informative" id="acknowledgements">
       <h2>Acknowledgements</h2>
