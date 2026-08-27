@@ -1,5 +1,5 @@
-<!doctype HTML>
-<html>
+<!doctype html>
+<html lang="en">
   <head>
     <title>Tiny &lt;install&gt; demo.</title>
     <link rel="manifest" href="./manifest.webmanifest">
@@ -14,7 +14,7 @@
         font-size: 1em;
         padding: 0.5rem 1rem;
         border: none;
-        border-radius: 1em; 
+        border-radius: 1em;
         background-color: rgb(10 87 208);
       }
 
@@ -46,8 +46,8 @@
     </style>
   </head>
   <body>
-    <h1><code><a href="https://github.com/mikewest/pepc-install">&lt;install&gt;</a> Demo</code></h1>
-    
+    <h1><code><a href="https://github.com/WICG/install-element">&lt;install&gt;</a> demo</code></h1>
+
     <div id="warning">
       <p>
         This browser doesn't appear to support the <code>&lt;install&gt;</code> element,
@@ -56,25 +56,27 @@
     </div>
 
     <h2>Current page:</h2>
-    <xmp><install></install></xmp>
-    <install></install>
+    <pre><code>&lt;install&gt;
+  &lt;a href="./"&gt;Open this app&lt;/a&gt;
+&lt;/install&gt;</code></pre>
+    <install>
+      <a href="./">Open this app</a>
+    </install>
 
-    <h2>Remote page:</h2>
-    <xmp><install manifest="..."></install></xmp>
-    <!--
-         Ideally, we'd point to the manifest here. The prototype implementation in Chromium
-         is based on the Web Install API, which has a slightly different set of constraints
-         and expectations than the <install> proposal, expecting a page from which a manifest
-         can be inferred or extracted instead of a manifest. So, that's what we'll run with
-         for the moment.
-    -->
-    <install manifest="https://kbhlee2121.github.io/pwa/web-install/index.html"></install>
+    <h2>Application identified by a manifest URL:</h2>
+    <pre><code>&lt;install manifest="./manifest.webmanifest"&gt;
+  &lt;a href="./"&gt;Open this app&lt;/a&gt;
+&lt;/install&gt;</code></pre>
+    <install manifest="./manifest.webmanifest">
+      <a href="./">Open this app</a>
+    </install>
 
     <script>
       if ('HTMLInstallElement' in window) {
         document.querySelectorAll('install').forEach(el => {
-          el.onpromptdismiss = console.log;
-          el.onpromptaction = console.log;
+          el.oninstallresult = event => {
+            console.log('Web Install result:', event.result);
+          };
         });
       } else {
         document.body.classList.add("no-install-element");
