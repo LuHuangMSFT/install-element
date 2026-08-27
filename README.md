@@ -29,8 +29,7 @@ decisions.
 
 ## Editors
 
-- [Lia Hiscock](https://github.com/LiaHiscock), Microsoft
-- [Mike West](https://github.com/mikewest), Google
+- [Lu Huang](https://github.com/LuHuangMSFT), Microsoft
 
 ## Related specifications
 
