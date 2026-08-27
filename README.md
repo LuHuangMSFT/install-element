@@ -13,7 +13,8 @@ application, protecting installed-state privacy, and reporting outcomes.
 ## Documents
 
 - [Specification source](./index.html)
-- [Explainer](./explainer.md)
+- [`<install>` element explainer](./explainer-manifest-url.md)
+- [`navigator.install()` explainer](https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/main/WebInstall/explainer.md)
 - [Rendered draft](https://wicg.github.io/install-element/)
 
 The specification is an integrated ReSpec Community Group Draft. Inline issues
