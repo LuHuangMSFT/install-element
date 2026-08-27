@@ -596,11 +596,10 @@ await navigator.install({
             [=web install request/manifest URL=].
           </li>
           <li>
-            If <var>manifestURL</var> is not an HTTP(S) URL whose
+            If <var>manifestURL</var> is not an HTTP(S) URL, or its
             [=url/origin=] is not
             <a data-cite="secure-contexts#is-origin-trustworthy">
-            potentially trustworthy</a>, return
-            [=invalid install data=].
+            potentially trustworthy</a>, return [=invalid install data=].
           </li>
           <li>
             Let <var>response</var> be the result of
@@ -625,7 +624,8 @@ await navigator.install({
           </li>
           <li>
             If <var>request</var>'s [=web install request/manifest ID=] is not
-            null, and it is not equal to <var>identity</var>, return
+            null, and it is not [=url/equal=] to <var>identity</var> with
+            [=URL/equals/exclude fragments=] set to true, return
             [=invalid install data=].
           </li>
           <li>
@@ -646,6 +646,14 @@ await navigator.install({
             <var>request</var> and <var>target</var>.
           </li>
         </ol>
+
+        <aside class="note" title="Manifest identity comparison">
+          Web App Manifest processing removes the fragment from a manifest
+          <code>id</code>. This algorithm nevertheless excludes fragments
+          explicitly when comparing identities, which is compatible with
+          identities produced by older implementations that may have retained
+          them.
+        </aside>
 
         <p class="issue">
           <strong>Relative manifest ID assertions are unresolved.</strong>
@@ -717,7 +725,12 @@ await navigator.install({
           Chromium rejects every redirect and parses successful bodies without
           checking MIME type. The explainers do not fully specify either
           behavior. This draft provisionally rejects redirects and does not add
-          a MIME requirement, matching current implementation.
+          a MIME requirement, matching current implementation. An alternative is
+          to follow redirects, accept a final response only when it is
+          same-origin with the originally requested manifest URL, and use the
+          final response URL as the base for manifest processing. This would
+          permit same-origin manifest relocation without allowing a redirect to
+          bypass cross-origin identity and permission checks.
         </p>
 
         <p>
@@ -768,7 +781,7 @@ await navigator.install({
         </ol>
 
         <p class="issue">
-          <strong>This is an explicit Web App Manifest integration.</strong>
+          <strong>How should a standalone manifest obtain a document URL?</strong>
           Chromium passes the manifest URL as both the document URL and manifest
           URL so relative members resolve against the manifest. Web App
           Manifest permits processing without a client but recommends evidence
@@ -776,6 +789,17 @@ await navigator.install({
           installation deliberately has no loaded target document. WebApps WG
           should decide whether this call is a supported parameterization or a
           monkeypatch requiring a new processing entry point.
+
+          A candidate is to parse enough of the response to require an explicit,
+          non-empty <code>start_url</code>, resolve it against the manifest URL,
+          require the result to be same-origin with the manifest URL, and supply
+          that result as the document URL to normal manifest processing. This
+          comparison must happen before normal <code>start_url</code> processing:
+          if the document URL is derived from the declared
+          <code>start_url</code>, comparing the processed
+          <code>start_url</code> with that document URL would compare the URL
+          with itself and would not establish the manifest origin's authority
+          over the application.
         </p>
 
         <p class="issue">
@@ -864,6 +888,16 @@ await navigator.install({
           it MUST NOT report their absence as [=invalid install data=] unless a
           future version of this specification makes them requirements.
         </p>
+
+        <aside class="note" title="Service workers and direct manifest installation">
+          A service worker is registered by script running in a document. An
+          explicit-manifest installation does not load the target application's
+          document, so installation alone does not cause its service worker to
+          be registered. A user agent may subsequently launch the application,
+          at which point the loaded document can register its worker normally.
+          A mechanism that declares or registers a service worker without
+          loading a document would be separate future work.
+        </aside>
       </section>
     </section>
 
@@ -1653,6 +1687,15 @@ dictionary InstallResultEventInit : EventInit {
             data-link-for="install">manifest</a></code> is invalid install data.
         </p>
 
+        <aside class="note" title="Why the attribute is named manifestid">
+          The attribute is named <code>manifestid</code>, rather than
+          <code>id</code>, because <code>id</code> is already a global HTML
+          attribute used for element identification, fragment navigation, and
+          related platform features. <code>manifestid</code> also corresponds
+          to the {{InstallParams/manifestId}} dictionary member used by
+          {{Navigator/install()}}.
+        </aside>
+
         <p class="issue">
           <strong>URL reflection needs alignment with HTML conventions.</strong>
           Chromium exposes nullable URL-reflecting attributes and currently
@@ -1689,6 +1732,32 @@ dictionary InstallResultEventInit : EventInit {
           <code>&lt;<a data-link-type="element">install</a>&gt;</code> treats
           it as an {{HTMLUnknownElement}}, allowing its children to provide
           ordinary HTML fallback.
+        </p>
+
+        <p class="issue">
+          <strong>Should an ineligible document render fallback content?</strong>
+          The common preconditions prevent installation from an inactive,
+          disallowed, or sandboxed document, but the rendering behavior is not
+          defined. One option is to suppress the native control, render the
+          author-provided fallback content, make
+          {{ActivationBlockersMixin/isValid}} false, and dispatch
+          {{ActivationBlockersMixin/onvalidationstatuschange}} when document
+          eligibility changes. The corresponding
+          {{ActivationBlockersMixin/invalidReason}} value would need to be
+          defined with the specification that owns the mixin.
+        </p>
+
+        <p class="issue">
+          <strong>May the element prefetch manifest presentation data?</strong>
+          A user agent might fetch and process the manifest before activation
+          to render the target application's name or icon. If this is allowed,
+          the fetch, caching, and failure behavior must not depend on installed
+          state; a failed prefetch must not replace the normal activation path;
+          a reused result needs freshness and revalidation rules; and the
+          arrival of manifest-derived content must not change
+          script-observable geometry or otherwise expose fetch completion or
+          installed state. Network observability by the manifest server and a
+          controlling service worker must also be accounted for.
         </p>
 
         <p>
@@ -1728,6 +1797,7 @@ dictionary InstallResultEventInit : EventInit {
           <li>
             If <var>event</var>.{{Event/isTrusted}} is false, return.
           </li>
+          <li>If [=this=] is not [=connected=], return.</li>
           <li>
             If [=this=].{{ActivationBlockersMixin/isValid}} is false, return.
           </li>
@@ -1814,6 +1884,16 @@ dictionary InstallResultEventInit : EventInit {
             </ol>
           </li>
         </ol>
+
+        <p class="issue">
+          <strong>Is the explicit connected check redundant?</strong>
+          The activation steps above prevent a disconnected element from
+          starting installation. If the final
+          <code>ActivationBlockersMixin</code> contract guarantees that removal
+          makes {{ActivationBlockersMixin/isValid}} false before activation can
+          run, the separate connected check may be unnecessary. Keep the guard
+          until that shared lifecycle contract is settled.
+        </p>
 
         <p class="issue">
           <strong>Blocked activation currently has no result event.</strong>
