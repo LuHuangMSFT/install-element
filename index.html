@@ -198,44 +198,45 @@
         </ul>
       </section>
 
-      <section>
-        <h3>Examples</h3>
+    </section>
 
-        <p>
-          A site can offer installation of the web application associated with
-          its current document:
-        </p>
+    <section id="examples" class="informative">
+      <h2>Examples</h2>
 
-        <pre class="example js">
+      <p>
+        A site can offer installation of the web application associated with
+        its current document:
+      </p>
+
+      <pre class="example js" title="Install the current web application with JavaScript">
 await navigator.install();
-        </pre>
+      </pre>
 
-        <pre class="example html">
+      <pre class="example html" title="Install the current web application with HTML">
 &lt;install&gt;
   &lt;a href="/install-help"&gt;How to install this app&lt;/a&gt;
 &lt;/install&gt;
-        </pre>
+      </pre>
 
-        <p>
-          A catalog can offer installation of an application identified by its
-          manifest URL:
-        </p>
+      <p>
+        A catalog can offer installation of an application identified by its
+        manifest URL:
+      </p>
 
-        <pre class="example js">
+      <pre class="example js" title="Install an application by manifest URL with JavaScript">
 await navigator.install({
   manifest: "https://music.example/manifest.webmanifest",
   manifestId: "https://music.example/app"
 });
-        </pre>
+      </pre>
 
-        <pre class="example html">
+      <pre class="example html" title="Install an application by manifest URL with HTML">
 &lt;install
   manifest="https://music.example/manifest.webmanifest"
   manifestid="https://music.example/app"&gt;
   &lt;a href="https://music.example/"&gt;Open Music Example&lt;/a&gt;
 &lt;/install&gt;
-        </pre>
-      </section>
+      </pre>
     </section>
 
     <section id="dependencies">
