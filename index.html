@@ -567,9 +567,18 @@ await navigator.install({
         <li>Let <var>target</var> be <var>targetResult</var>.</li>
         <li>
           If <var>document</var> is no longer an
-          [=eligible installing document=], clear the active request marker and
-          return the result of [=finish a web install request=] with
-          <var>request</var> and [=installation state invalid=].
+          [=eligible installing document=]:
+          <ol>
+            <li>
+              If <var>traversable</var>'s
+              [=top-level traversable/active web install request=] is
+              <var>request</var>, set it to null.
+            </li>
+            <li>
+              Return the result of [=finish a web install request=] with
+              <var>request</var> and [=installation state invalid=].
+            </li>
+          </ol>
         </li>
         <li>
           Let <var>permissionGranted</var> be the result of
