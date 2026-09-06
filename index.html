@@ -210,44 +210,48 @@
         </ul>
       </section>
 
-      <section>
-        <h3>Examples</h3>
+    </section>
 
-        <p>
-          A site can offer installation of the web application associated with
-          its current document:
-        </p>
+    <section id="examples" class="informative">
+      <h2>Examples</h2>
 
-        <pre class="example js">
+      <p>
+        A site can offer installation of the web application associated with
+        its current document:
+      </p>
+
+      <pre class="example js"
+        title="Install the current web application with JavaScript">
 await navigator.install();
-        </pre>
+      </pre>
 
-        <pre class="example html">
+      <pre class="example html" title="Install the current web application with HTML">
 &lt;install&gt;
   &lt;a href="/install-help"&gt;How to install this app&lt;/a&gt;
 &lt;/install&gt;
-        </pre>
+      </pre>
 
-        <p>
-          A catalog can offer installation of an application identified by its
-          manifest URL:
-        </p>
+      <p>
+        A catalog can offer installation of an application identified by its
+        manifest URL:
+      </p>
 
-        <pre class="example js">
+      <pre class="example js"
+        title="Install an application by manifest URL with JavaScript">
 await navigator.install({
   manifest: "https://music.example/manifest.webmanifest",
   manifestId: "https://music.example/app"
 });
-        </pre>
+      </pre>
 
-        <pre class="example html">
+      <pre class="example html"
+        title="Install an application by manifest URL with HTML">
 &lt;install
   manifest="https://music.example/manifest.webmanifest"
   manifestid="https://music.example/app"&gt;
   &lt;a href="https://music.example/"&gt;Open Music Example&lt;/a&gt;
 &lt;/install&gt;
-        </pre>
-      </section>
+      </pre>
     </section>
 
     <section id="dependencies">
@@ -468,6 +472,206 @@ await navigator.install({
         exposing less cross-origin information. The algorithms below
         provisionally retain the coarse current behavior and mark the
         entry-point mappings explicitly.
+      </p>
+    </section>
+
+    <section id="shared-algorithm">
+      <h2>Shared Web Install processing</h2>
+
+      <aside class="note" title="How a request is processed">
+        <p>
+          Both {{Navigator/install()}} and
+          <code>&lt;<a data-link-type="element">install</a>&gt;</code> create a
+          [=web install request=] and use the same processing flow. The sections
+          following this one define each stage in the same order:
+        </p>
+
+        <ol>
+          <li>
+            Check that the calling page may initiate installation and that no
+            other install request is active in its tab or window.
+          </li>
+          <li>
+            Identify and validate the application to install. A
+            current-document request uses its processed manifest; an
+            explicit-manifest request fetches and processes the supplied
+            manifest URL.
+          </li>
+          <li>Obtain installation permission when the request requires it.</li>
+          <li>
+            Present user-controlled confirmation UI and, if accepted, install
+            the target or perform an approved action for an already-installed
+            application.
+          </li>
+          <li>
+            Finish the request. The initiating entry point then maps the
+            internal outcome to its public result.
+          </li>
+        </ol>
+
+        <p>
+          For a new application, installation is the last required operation.
+          The user agent may launch it afterward, but launching is not part of
+          the required shared flow.
+        </p>
+      </aside>
+
+      <p>
+        To <dfn>finish a web install request</dfn> given a
+        [=web install request=] <var>request</var> and
+        [=web install outcome=] <var>outcome</var>, run the following steps:
+      </p>
+
+      <ol class="algorithm">
+        <li>
+          Set <var>request</var>'s [=web install request/state=] to
+          <code>complete</code>.
+        </li>
+        <li>
+          Let <var>traversable</var> be <var>request</var>'s
+          [=web install request/document=]'s [=top-level traversable=], if it
+          has one; otherwise null.
+        </li>
+        <li>
+          If <var>traversable</var> is not null and its
+          [=top-level traversable/active web install request=] is
+          <var>request</var>, set it to null.
+        </li>
+        <li>Return <var>outcome</var>.</li>
+      </ol>
+
+      <p>
+        To <dfn>run a web install request</dfn> given a
+        [=web install request=] <var>request</var>, run the following steps:
+      </p>
+
+      <ol class="algorithm">
+        <li>
+          Let <var>document</var> be <var>request</var>'s
+          [=web install request/document=].
+        </li>
+        <li>
+          If <var>document</var> is not an [=eligible installing document=],
+          return the result of [=finish a web install request=] with
+          <var>request</var> and [=installation state invalid=].
+        </li>
+        <li>
+          Let <var>traversable</var> be <var>document</var>'s
+          [=top-level traversable=].
+        </li>
+        <li>
+          If <var>traversable</var>'s
+          [=top-level traversable/active web install request=] is not null,
+          return
+          the result of [=finish a web install request=] with
+          <var>request</var> and [=installation operation aborted=].
+        </li>
+        <li>
+          Set <var>traversable</var>'s
+          [=top-level traversable/active web install request=] to
+          <var>request</var>.
+        </li>
+        <li>
+          If <var>request</var>'s [=web install request/target mode=] is
+          [=current document=], let <var>targetResult</var> be the result of
+          [=resolve a current-document install target=] for
+          <var>request</var>. Otherwise, let <var>targetResult</var> be the
+          result of [=resolve an explicit manifest install target=] for
+          <var>request</var>.
+        </li>
+        <li>
+          If <var>targetResult</var> is a [=web install outcome=], return the
+          result of [=finish a web install request=] with
+          <var>request</var> and <var>targetResult</var>.
+        </li>
+        <li>Let <var>target</var> be <var>targetResult</var>.</li>
+        <li>
+          If <var>document</var> is no longer an
+          [=eligible installing document=]:
+          <ol>
+            <li>
+              If <var>traversable</var>'s
+              [=top-level traversable/active web install request=] is
+              <var>request</var>, set it to null.
+            </li>
+            <li>
+              Return the result of [=finish a web install request=] with
+              <var>request</var> and [=installation state invalid=].
+            </li>
+          </ol>
+        </li>
+        <li>
+          Let <var>permissionGranted</var> be the result of
+          [=obtain web install permission=] for <var>request</var>.
+        </li>
+        <li>
+          If <var>permissionGranted</var> is false, return the result of
+          [=finish a web install request=] with <var>request</var> and
+          [=installation not allowed=].
+        </li>
+        <li>
+          Let <var>outcome</var> be the result of
+          [=perform web installation=] with <var>request</var> and
+          <var>target</var>.
+        </li>
+        <li>
+          Return the result of [=finish a web install request=] with
+          <var>request</var> and <var>outcome</var>.
+        </li>
+      </ol>
+
+      <p class="issue">
+        <strong>The network request currently precedes permission.</strong>
+        The algorithm matches Chromium by fetching and validating an explicit
+        manifest before checking installation permission and profile support.
+        This helps coarsen private-profile failures behind data errors, but it
+        lets a target origin observe a request before the installing user grants
+        permission. The final ordering requires privacy and implementer review.
+      </p>
+
+      <aside class="issue"
+        title="Should installed state be checked before fetching a manifest?">
+        <p>
+          The provisional algorithm always fetches and processes an explicit
+          manifest before checking for an installed application. An alternative
+          checks first when the caller supplied an expected identity, avoiding
+          an unnecessary fetch, and checks again after processing when identity
+          was initially unknown.
+        </p>
+        <p>
+          The alternative creates a one-sided network signal: the manifest
+          server receives a request only when the named application is not
+          already installed. The provisional order avoids that signal but can
+          contact the target origin before installation permission is granted.
+          The final ordering should analyze both observers—the installing origin
+          and the target manifest origin—and the possibility that they cooperate.
+        </p>
+      </aside>
+
+      <p class="issue">
+        <strong>Concurrency scope is provisional.</strong>
+        Chromium has document-service and WebContents-level guards, while the
+        capability-element implementation also caps registered install
+        elements. This draft defines one active operation per top-level
+        traversable because that is the visible dialog scope. Per-profile,
+        per-origin, cooldown, and quota controls remain user-agent anti-abuse
+        policy.
+      </p>
+
+      <p>
+        If the [=installing document=] navigates, is destroyed, ceases to be
+        fully active, or ceases to be the active document of its top-level
+        traversable before processing completes, the user agent MUST cancel
+        associated user interface and complete the request with
+        [=installation state invalid=].
+      </p>
+
+      <p class="issue">
+        <strong>Navigation and BFCache lifetime need exact HTML integration.</strong>
+        Chromium cancels on every cross-document navigation, including
+        same-origin navigation and BFCache transitions. This draft preserves
+        the active-document invariant but does not yet define whether a BFCache
+        restoration can resume an operation.
       </p>
     </section>
 
@@ -1235,159 +1439,6 @@ await navigator.install({
         integration, and launches new installations. Those choices are not
         stated as interoperable requirements in the proposal and are not
         required by this draft.
-      </p>
-    </section>
-
-    <section id="shared-algorithm">
-      <h2>Shared Web Install processing</h2>
-
-      <p>
-        To <dfn>finish a web install request</dfn> given a
-        [=web install request=] <var>request</var> and
-        [=web install outcome=] <var>outcome</var>, run the following steps:
-      </p>
-
-      <ol class="algorithm">
-        <li>
-          Set <var>request</var>'s [=web install request/state=] to
-          <code>complete</code>.
-        </li>
-        <li>
-          Let <var>traversable</var> be <var>request</var>'s
-          [=web install request/document=]'s [=top-level traversable=], if it
-          has one; otherwise null.
-        </li>
-        <li>
-          If <var>traversable</var> is not null and its
-          [=top-level traversable/active web install request=] is
-          <var>request</var>, set it to null.
-        </li>
-        <li>Return <var>outcome</var>.</li>
-      </ol>
-
-      <p>
-        To <dfn>run a web install request</dfn> given a
-        [=web install request=] <var>request</var>, run the following steps:
-      </p>
-
-      <ol class="algorithm">
-        <li>
-          Let <var>document</var> be <var>request</var>'s
-          [=web install request/document=].
-        </li>
-        <li>
-          If <var>document</var> is not an [=eligible installing document=],
-          return the result of [=finish a web install request=] with
-          <var>request</var> and [=installation state invalid=].
-        </li>
-        <li>
-          Let <var>traversable</var> be <var>document</var>'s
-          [=top-level traversable=].
-        </li>
-        <li>
-          If <var>traversable</var>'s
-          [=top-level traversable/active web install request=] is not null,
-          return
-          the result of [=finish a web install request=] with
-          <var>request</var> and [=installation operation aborted=].
-        </li>
-        <li>
-          Set <var>traversable</var>'s
-          [=top-level traversable/active web install request=] to
-          <var>request</var>.
-        </li>
-        <li>
-          If <var>request</var>'s [=web install request/target mode=] is
-          [=current document=], let <var>targetResult</var> be the result of
-          [=resolve a current-document install target=] for
-          <var>request</var>. Otherwise, let <var>targetResult</var> be the
-          result of [=resolve an explicit manifest install target=] for
-          <var>request</var>.
-        </li>
-        <li>
-          If <var>targetResult</var> is a [=web install outcome=], return the
-          result of [=finish a web install request=] with
-          <var>request</var> and <var>targetResult</var>.
-        </li>
-        <li>Let <var>target</var> be <var>targetResult</var>.</li>
-        <li>
-          If <var>document</var> is no longer an
-          [=eligible installing document=], clear the active request marker and
-          return the result of [=finish a web install request=] with
-          <var>request</var> and [=installation state invalid=].
-        </li>
-        <li>
-          Let <var>permissionGranted</var> be the result of
-          [=obtain web install permission=] for <var>request</var>.
-        </li>
-        <li>
-          If <var>permissionGranted</var> is false, return the result of
-          [=finish a web install request=] with <var>request</var> and
-          [=installation not allowed=].
-        </li>
-        <li>
-          Let <var>outcome</var> be the result of
-          [=perform web installation=] with <var>request</var> and
-          <var>target</var>.
-        </li>
-        <li>
-          Return the result of [=finish a web install request=] with
-          <var>request</var> and <var>outcome</var>.
-        </li>
-      </ol>
-
-      <p class="issue">
-        <strong>The network request currently precedes permission.</strong>
-        The algorithm matches Chromium by fetching and validating an explicit
-        manifest before checking installation permission and profile support.
-        This helps coarsen private-profile failures behind data errors, but it
-        lets a target origin observe a request before the installing user grants
-        permission. The final ordering requires privacy and implementer review.
-      </p>
-
-      <aside class="issue"
-        title="Should installed state be checked before fetching a manifest?">
-        <p>
-          The provisional algorithm always fetches and processes an explicit
-          manifest before checking for an installed application. An alternative
-          checks first when the caller supplied an expected identity, avoiding
-          an unnecessary fetch, and checks again after processing when identity
-          was initially unknown.
-        </p>
-        <p>
-          The alternative creates a one-sided network signal: the manifest
-          server receives a request only when the named application is not
-          already installed. The provisional order avoids that signal but can
-          contact the target origin before installation permission is granted.
-          The final ordering should analyze both observers—the installing origin
-          and the target manifest origin—and the possibility that they cooperate.
-        </p>
-      </aside>
-
-      <p class="issue">
-        <strong>Concurrency scope is provisional.</strong>
-        Chromium has document-service and WebContents-level guards, while the
-        capability-element implementation also caps registered install
-        elements. This draft defines one active operation per top-level
-        traversable because that is the visible dialog scope. Per-profile,
-        per-origin, cooldown, and quota controls remain user-agent anti-abuse
-        policy.
-      </p>
-
-      <p>
-        If the [=installing document=] navigates, is destroyed, ceases to be
-        fully active, or ceases to be the active document of its top-level
-        traversable before processing completes, the user agent MUST cancel
-        associated user interface and complete the request with
-        [=installation state invalid=].
-      </p>
-
-      <p class="issue">
-        <strong>Navigation and BFCache lifetime need exact HTML integration.</strong>
-        Chromium cancels on every cross-document navigation, including
-        same-origin navigation and BFCache transitions. This draft preserves
-        the active-document invariant but does not yet define whether a BFCache
-        restoration can resume an operation.
       </p>
     </section>
 
