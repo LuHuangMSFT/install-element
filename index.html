@@ -104,6 +104,18 @@
         inline. Those issues are part of the draft and do not indicate
         implementer consensus.
       </p>
+      <p class="issue">
+        <strong>Should the integrated draft be split when it is adopted?</strong>
+        This incubation keeps the shared installation process,
+        {{Navigator/install()}}, and the
+        <code>&lt;<a data-link-type="element">install</a>&gt;</code> element in
+        one document so their observable behavior cannot drift. An earlier
+        organization proposed placing shared processing in Web App Manifest or
+        Manifest Incubations while keeping each entry point in a separate
+        specification. The integrated organization remains the provisional
+        WICG design; the adopting Working Group or WHATWG workstream may later
+        require a different editorial split.
+      </p>
     </section>
 
     <section class="informative">
@@ -273,7 +285,12 @@ await navigator.install({
         use. This draft references only the narrower
         <code>ActivationBlockersMixin</code>. Before advancement, that mixin
         should have a maintained, independently referenceable specification
-        home, or the required behavior must be defined here.
+        home, or the required behavior must be defined here. Earlier draft text
+        argued that prompt events and installation-result events describe
+        different stages and should both remain exposed. The current
+        implementation does not fire those inherited prompt events. Their
+        inclusion should be reconsidered only after the shared mixin contract
+        and its specification home are settled.
       </p>
 
       <p>
@@ -612,6 +629,25 @@ await navigator.install({
         permission. The final ordering requires privacy and implementer review.
       </p>
 
+      <aside class="issue"
+        title="Should installed state be checked before fetching a manifest?">
+        <p>
+          The provisional algorithm always fetches and processes an explicit
+          manifest before checking for an installed application. An alternative
+          checks first when the caller supplied an expected identity, avoiding
+          an unnecessary fetch, and checks again after processing when identity
+          was initially unknown.
+        </p>
+        <p>
+          The alternative creates a one-sided network signal: the manifest
+          server receives a request only when the named application is not
+          already installed. The provisional order avoids that signal but can
+          contact the target origin before installation permission is granted.
+          The final ordering should analyze both observers—the installing origin
+          and the target manifest origin—and the possibility that they cooperate.
+        </p>
+      </aside>
+
       <p class="issue">
         <strong>Concurrency scope is provisional.</strong>
         Chromium has document-service and WebContents-level guards, while the
@@ -674,13 +710,25 @@ await navigator.install({
         <li>Return true.</li>
       </ol>
 
-      <p class="issue">
-        <strong>Frame and sandbox scope needs multi-implementer review.</strong>
-        Chromium currently requires the primary top-level document and rejects
-        every sandboxed context. Proposal text leaves same-origin frames and a
-        future sandbox opt-in open. This draft preserves Chromium's restrictive
-        behavior until a safe delegation model is designed.
-      </p>
+      <aside class="issue"
+        title="Frame and sandbox scope needs multi-implementer review">
+        <p>
+          Chromium currently requires the primary top-level document and rejects
+          every sandboxed context. Proposal text leaves same-origin frames and a
+          future sandbox opt-in open. This draft preserves Chromium's restrictive
+          behavior until a safe delegation model is designed.
+        </p>
+        <p>
+          An alternative is to let a user agent permit installation from a
+          descendant or sandboxed document as a matter of policy. If that is
+          allowed, both entry points should use the same eligibility rule, and
+          the consent UI must attribute the request to the origin whose action
+          initiated installation. The existing
+          <code>web-app-installation</code> policy-controlled feature could
+          express frame delegation once the top-level-only check is relaxed; a
+          sandboxed document may additionally require an explicit sandbox token.
+        </p>
+      </aside>
 
       <p class="issue">
         <strong>Secure-context exposure is inconsistent.</strong>
@@ -781,11 +829,10 @@ await navigator.install({
             [=web install request/manifest URL=].
           </li>
           <li>
-            If <var>manifestURL</var> is not an HTTP(S) URL whose
+            If <var>manifestURL</var> is not an HTTP(S) URL, or its
             [=url/origin=] is not
             <a data-cite="secure-contexts#is-origin-trustworthy">
-            potentially trustworthy</a>, return
-            [=invalid install data=].
+            potentially trustworthy</a>, return [=invalid install data=].
           </li>
           <li>
             Let <var>response</var> be the result of
@@ -810,7 +857,8 @@ await navigator.install({
           </li>
           <li>
             If <var>request</var>'s [=web install request/manifest ID=] is not
-            null, and it is not equal to <var>identity</var>, return
+            null, and it is not [=url/equal=] to <var>identity</var> with
+            [=URL/equals/exclude fragments=] set to true, return
             [=invalid install data=].
           </li>
           <li>
@@ -831,6 +879,14 @@ await navigator.install({
             <var>request</var> and <var>target</var>.
           </li>
         </ol>
+
+        <aside class="note" title="Manifest identity comparison">
+          Web App Manifest processing removes the fragment from a manifest
+          <code>id</code>. This algorithm nevertheless excludes fragments
+          explicitly when comparing identities, which is compatible with
+          identities produced by older implementations that may have retained
+          them.
+        </aside>
 
         <p class="issue">
           <strong>Relative manifest ID assertions are unresolved.</strong>
@@ -897,13 +953,37 @@ await navigator.install({
           integration before this algorithm is implementable across engines.
         </p>
 
-        <p class="issue">
-          <strong>Redirect and MIME behavior need agreement.</strong>
-          Chromium rejects every redirect and parses successful bodies without
-          checking MIME type. The explainers do not fully specify either
-          behavior. This draft provisionally rejects redirects and does not add
-          a MIME requirement, matching current implementation.
-        </p>
+        <aside class="issue" title="Redirect and MIME behavior">
+          <p>
+            Chromium rejects every redirect and parses successful bodies without
+            checking MIME type. The explainers do not fully specify either
+            behavior. This draft provisionally rejects redirects and does not
+            add a MIME requirement, matching current implementation.
+          </p>
+          <p>A candidate redirect model would:</p>
+          <ol>
+            <li>allow Fetch to follow redirects;</li>
+            <li>
+              reject the response if its final URL is not same-origin with the
+              originally requested manifest URL;
+            </li>
+            <li>
+              use the final response URL as the base for processing manifest URL
+              members; and
+            </li>
+            <li>
+              classify a disallowed redirect as [=invalid install data=], like
+              other manifest-fetch failures.
+            </li>
+          </ol>
+          <p>
+            This permits same-origin manifest relocation without allowing a
+            redirect to bypass cross-origin identity and permission checks.
+            MIME enforcement remains a separate choice: requiring a manifest
+            MIME type improves type safety but would diverge from the current
+            implementation and some existing manifest deployments.
+          </p>
+        </aside>
 
         <p>
           A user agent MAY impose implementation-defined response-size,
@@ -952,16 +1032,67 @@ await navigator.install({
           <li>Return <var>manifest</var>.</li>
         </ol>
 
-        <p class="issue">
-          <strong>This is an explicit Web App Manifest integration.</strong>
-          Chromium passes the manifest URL as both the document URL and manifest
-          URL so relative members resolve against the manifest. Web App
-          Manifest permits processing without a client but recommends evidence
-          that a document was historically associated with the manifest. Direct
-          installation deliberately has no loaded target document. WebApps WG
-          should decide whether this call is a supported parameterization or a
-          monkeypatch requiring a new processing entry point.
-        </p>
+        <aside class="issue"
+          title="How should a standalone manifest obtain a document URL?">
+          <p>
+            Chromium passes the manifest URL as both the document URL and
+            manifest URL so relative members resolve against the manifest. Web
+            App Manifest permits processing without a client but recommends
+            evidence that a document was historically associated with the
+            manifest. Direct installation deliberately has no loaded target
+            document. WebApps WG should decide whether this call is a supported
+            parameterization or a monkeypatch requiring a new processing entry
+            point.
+          </p>
+          <p>A candidate standalone-manifest processing entry point would:</p>
+          <ol>
+            <li>
+              parse the response bytes as JSON and require an ordered map;
+            </li>
+            <li>
+              require an explicitly declared, non-empty string
+              <code>start_url</code>;
+            </li>
+            <li>
+              parse that value with the final manifest response URL as its base;
+            </li>
+            <li>
+              reject the target unless the resulting start URL is same-origin
+              with the final manifest URL;
+            </li>
+            <li>
+              invoke normal Web App Manifest processing with the resulting
+              start URL as the document URL, the final response URL as the
+              manifest URL, the original response bytes, and the appropriate
+              client; and
+            </li>
+            <li>
+              return failure if normal processing does not produce a usable
+              manifest.
+            </li>
+          </ol>
+          <p>
+            The origin comparison must happen before normal
+            <code>start_url</code> processing. If the document URL is derived
+            from the declared <code>start_url</code>, comparing the processed
+            <code>start_url</code> with that document URL would compare the URL
+            with itself and would not establish the manifest origin's authority
+            over the application.
+          </p>
+          <p>
+            Under the current parameterization, normal manifest processing can
+            replace a declared cross-origin <code>start_url</code> with the
+            supplied document URL—the manifest URL—making the later same-origin
+            validation ineffective. The candidate makes the draft's intended
+            same-origin requirement enforceable.
+          </p>
+          <p>
+            Like that existing requirement, the candidate excludes a manifest
+            hosted on a different CDN origin from the application it describes.
+            Supporting that deployment requires another proof that the
+            application origin authorized the standalone manifest.
+          </p>
+        </aside>
 
         <p class="issue">
           <strong>Source-member presence must survive processing.</strong>
@@ -1049,6 +1180,16 @@ await navigator.install({
           it MUST NOT report their absence as [=invalid install data=] unless a
           future version of this specification makes them requirements.
         </p>
+
+        <aside class="note" title="Service workers and direct manifest installation">
+          A service worker is registered by script running in a document. An
+          explicit-manifest installation does not load the target application's
+          document, so installation alone does not cause its service worker to
+          be registered. A user agent may subsequently launch the application,
+          at which point the loaded document can register its worker normally.
+          A mechanism that declares or registers a service worker without
+          loading a document would be separate future work.
+        </aside>
       </section>
     </section>
 
@@ -1076,15 +1217,40 @@ await navigator.install({
         </p>
 
         <p class="issue">
-          <strong>Permission scope and applicability conflict across evidence.</strong>
-          Some proposal text describes the permission as cross-origin-only,
-          other proposal text requires it for every explicitly targeted
-          manifest, and Chromium currently checks it for every
-          {{Navigator/install()}} explicit-manifest request. The algorithm below
-          provisionally follows Chromium: the permission is required for the
-          imperative explicit-manifest form, regardless of whether caller and
-          target are same-origin.
+          <strong>Does installation need a dedicated permission descriptor?</strong>
+          The current algorithm constructs a base {{PermissionDescriptor}} whose
+          name is <code>web-app-installation</code>. A candidate integration
+          defines an empty
+          <code>WebAppInstallationPermissionDescriptor</code> dictionary that
+          derives from {{PermissionDescriptor}}, making the new permission an
+          explicit Permissions API extension point even though it has no
+          additional members. The choice should follow the Permissions
+          specification's registry and WebIDL conventions.
         </p>
+
+        <aside class="issue"
+          title="Permission scope and applicability conflict across evidence">
+          <p>
+            Some proposal text describes the permission as cross-origin-only,
+            other proposal text requires it for every explicitly targeted
+            manifest, and Chromium currently checks it for every
+            {{Navigator/install()}} explicit-manifest request. The algorithm
+            below provisionally follows Chromium: the permission is required
+            for the imperative explicit-manifest form, regardless of whether
+            caller and target are same-origin.
+          </p>
+          <p>
+            An alternative applies the permission only when the manifest URL is
+            cross-origin with the installing document, but applies that rule to
+            both entry points. Under that model, a user denial blocks a
+            requesting catalog from soliciting any target application, while
+            same-origin and current-application installation rely on the
+            installation confirmation UI. This also means a trusted
+            <code>&lt;<a data-link-type="element">install</a>&gt;</code>
+            activation would not bypass a stored denial for a cross-origin
+            request.
+          </p>
+        </aside>
 
         <p class="issue">
           <strong>The default permission state differs between products.</strong>
@@ -1256,6 +1422,18 @@ await navigator.install({
       </p>
 
       <p class="issue">
+        <strong>Should an already-installed application launch automatically?</strong>
+        The provisional algorithm presents user-controlled UI before taking an
+        action on an existing application. An alternative immediately launches
+        a matching application and returns success. That alternative also
+        proposes opening a new browser-mode context when an instance is already
+        running rather than focusing or disrupting it. This choice affects user
+        agency, launch-handler behavior, platform integration, and what timing
+        or focus changes reveal to the installing page; it must not be inherited
+        as an implementation detail.
+      </p>
+
+      <p class="issue">
         <strong>Display mode and OS integration are user-agent policy.</strong>
         Chromium currently forces a standalone display mode, requests OS
         integration, and launches new installations. Those choices are not
@@ -1282,6 +1460,20 @@ dictionary WebInstallResult {};
       </pre>
 
       <p class="issue">
+        <strong>May manifestId assert the current application's identity?</strong>
+        The provisional {{InstallParams}} dictionary requires
+        {{InstallParams/manifest}}, and the
+        <code>&lt;<a data-link-type="element">install</a>&gt;</code> element
+        treats <code>manifestid</code> without <code>manifest</code> as invalid
+        data. An alternative makes <code>manifest</code> optional and lets an
+        identity-only request target the current application while asserting
+        the identity the user agent must compute from its processed manifest.
+        A mismatch would surface as <code>DataError</code> or
+        <code>invalid_data</code>. This capability is not implemented today and
+        changes both public entry points.
+      </p>
+
+      <p class="issue">
         <strong>Consider <code>[SecureContext]</code>.</strong>
         Chromium does not annotate these interfaces with
         <code>[SecureContext]</code>, although practical use is restricted to
@@ -1300,14 +1492,23 @@ dictionary WebInstallResult {};
         unnecessary lifecycle or profile information.
       </p>
 
-      <p class="issue">
-        <strong>The result dictionary is intentionally empty.</strong>
-        Earlier IDL contains a <code>manifestId</code> member, while the current
-        manifest-target implementation deliberately withholds it. This draft
-        defines an empty dictionary for future compatibility. A
-        <code>Promise&lt;undefined&gt;</code> return type remains a simpler
-        alternative.
-      </p>
+      <aside class="issue" title="The result dictionary is intentionally empty">
+        <p>
+          Earlier IDL contains a <code>manifestId</code> member, while the
+          current manifest-target implementation deliberately withholds it.
+          This draft defines an empty dictionary for future compatibility. A
+          <code>Promise&lt;undefined&gt;</code> return type remains a simpler
+          alternative.
+        </p>
+        <p>
+          Another alternative returns the resolved manifest identity. That
+          would let a caller that omitted {{InstallParams/manifestId}} record
+          what it installed, and the value is derived from a caller-selected
+          manifest. However, exposing it also gives a cross-origin installer an
+          explicit identity result that the current privacy design withholds.
+          The return shape and error coarsening should be decided together.
+        </p>
+      </aside>
 
       <section data-dfn-for="Navigator">
         <h3><dfn><code>install()</code></dfn> method</h3>
@@ -1602,6 +1803,11 @@ dictionary InstallResultEventInit : EventInit {
         content inside a supported interactive element can create activation
         and accessibility ambiguity. This draft provisionally allows phrasing
         content and suppresses author children when the native control renders.
+        An alternative allows flow content but prohibits descendants that are
+        themselves permission or capability elements, preventing nested trusted
+        controls while retaining richer fallback markup. The final model should
+        also say how other interactive fallback descendants behave when the
+        native control is supported.
       </p>
 
       <p>
@@ -1704,6 +1910,15 @@ dictionary InstallResultEventInit : EventInit {
             data-link-for="install">manifest</a></code> is invalid install data.
         </p>
 
+        <aside class="note" title="Why the attribute is named manifestid">
+          The attribute is named <code>manifestid</code>, rather than
+          <code>id</code>, because <code>id</code> is already a global HTML
+          attribute used for element identification, fragment navigation, and
+          related platform features. <code>manifestid</code> also corresponds
+          to the {{InstallParams/manifestId}} dictionary member used by
+          {{Navigator/install()}}.
+        </aside>
+
         <p class="issue">
           <strong>URL reflection needs alignment with HTML conventions.</strong>
           Chromium exposes nullable URL-reflecting attributes and currently
@@ -1742,6 +1957,87 @@ dictionary InstallResultEventInit : EventInit {
           ordinary HTML fallback.
         </p>
 
+        <aside class="issue"
+          title="Should an ineligible document render fallback content?">
+          <p>
+            The common preconditions prevent installation from an inactive,
+            disallowed, or sandboxed document, but the rendering behavior is not
+            defined.
+          </p>
+          <p>A candidate behavior would:</p>
+          <ol>
+            <li>suppress the user-agent-rendered native control;</li>
+            <li>render the author-provided fallback content instead;</li>
+            <li>make {{ActivationBlockersMixin/isValid}} false;</li>
+            <li>
+              expose a document-ineligibility
+              {{ActivationBlockersMixin/invalidReason}} defined with the
+              specification that owns the mixin; and
+            </li>
+            <li>
+              dispatch
+              {{ActivationBlockersMixin/onvalidationstatuschange}} if document
+              eligibility changes during the element's lifetime.
+            </li>
+          </ol>
+          <p>
+            This state depends on document activity, sandboxing, navigable
+            position, and user-agent policy—not on whether the target
+            application is installed—so replacing the native control with
+            fallback content need not expose user installation state. The
+            accessibility mapping must likewise describe the fallback content,
+            not a native control that cannot be activated.
+          </p>
+          <p>
+            Adopting this candidate would require the preceding native-rendering
+            requirement to apply only while the element's document is eligible.
+          </p>
+        </aside>
+
+        <aside class="issue"
+          title="May the element prefetch manifest presentation data?">
+          <p>
+            A user agent might fetch and process the manifest before activation
+            to render the target application's name or icon.
+          </p>
+          <p>If prefetch is allowed, candidate constraints include:</p>
+          <ol>
+            <li>
+              use the same credential and target-authority protections as the
+              activation-time manifest fetch;
+            </li>
+            <li>
+              do not condition whether or when a request is sent on installed
+              state;
+            </li>
+            <li>
+              do not change validity or dispatch an install result when a
+              prefetch fails;
+            </li>
+            <li>
+              run the normal activation path after a failed prefetch, and reuse
+              successful data only under defined freshness and revalidation
+              rules;
+            </li>
+            <li>
+              do not let manifest-derived content change script-observable
+              geometry, computed style, accessibility state, or timing according
+              to fetch success or installed state; and
+            </li>
+            <li>
+              account for the request being observable to the manifest server,
+              a controlling service worker, resource timing, and cooperating
+              origins.
+            </li>
+          </ol>
+          <p>
+            A user agent could reserve presentation space or defer applying
+            fetched content to avoid an observable layout transition. These
+            constraints protect install-state independence; they cannot make an
+            actual network request invisible.
+          </p>
+        </aside>
+
         <p>
           The native control's rendering, intrinsic dimensions, accessible
           properties, DOM-observable state, and supported pseudo-classes MUST
@@ -1779,6 +2075,7 @@ dictionary InstallResultEventInit : EventInit {
           <li>
             If <var>event</var>.{{Event/isTrusted}} is false, return.
           </li>
+          <li>If [=this=] is not [=connected=], return.</li>
           <li>
             If [=this=].{{ActivationBlockersMixin/isValid}} is false, return.
           </li>
@@ -1865,6 +2162,16 @@ dictionary InstallResultEventInit : EventInit {
             </ol>
           </li>
         </ol>
+
+        <p class="issue">
+          <strong>Is the explicit connected check redundant?</strong>
+          The activation steps above prevent a disconnected element from
+          starting installation. If the final
+          <code>ActivationBlockersMixin</code> contract guarantees that removal
+          makes {{ActivationBlockersMixin/isValid}} false before activation can
+          run, the separate connected check may be unnecessary. Keep the guard
+          until that shared lifecycle contract is settled.
+        </p>
 
         <p class="issue">
           <strong>Blocked activation currently has no result event.</strong>
@@ -1982,6 +2289,19 @@ dictionary InstallResultEventInit : EventInit {
           bubbles it, and leaves it non-cancelable and non-composed. Tests do
           not yet pin ordering relative to dialog closure, application launch,
           navigation, or promise microtasks, nor the composed/cancelable flags.
+        </p>
+
+        <p class="issue">
+          <strong>Event values and task source differ across drafts.</strong>
+          The provisional surface uses <code>success</code>,
+          <code>invalid_data</code>, and <code>aborted</code>, queued on the
+          user interaction task source, matching the current implementation.
+          Earlier draft text used <code>installed</code>,
+          <code>data-error</code>, and <code>aborted</code>, queued on the DOM
+          manipulation task source. The final choice should align terminology
+          with the shared outcome model, preserve asynchronous dispatch for
+          early validation failures, and select the task source whose ordering
+          guarantees match user interaction and installation UI.
         </p>
       </section>
 
