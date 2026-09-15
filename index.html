@@ -29,10 +29,12 @@
         xref: {
           specs: [
             "appmanifest",
+            "CSP3",
             "dom",
             "fetch",
             "html",
             "infra",
+            "mimesniff",
             "permissions",
             "permissions-policy",
             "secure-contexts",
@@ -57,6 +59,11 @@
           "LAUNCH-HANDLER": {
             title: "Web App Launch Handler API",
             href: "https://wicg.github.io/web-app-launch/",
+            publisher: "WICG",
+          },
+          "LOCAL-NETWORK-ACCESS": {
+            title: "Local Network Access",
+            href: "https://wicg.github.io/local-network-access/",
             publisher: "WICG",
           },
           "HTML-AAM": {
@@ -249,8 +256,9 @@ await navigator.install({
         the <code>&lt;<a data-link-type="element">install</a>&gt;</code>
         element. It reuses manifest concepts and processing from
         [[!appmanifest]], permission concepts from [[!permissions]], policy
-        control from [[!permissions-policy]], and request processing from
-        [[!FETCH]].
+        control from [[!permissions-policy]], content restrictions from
+        [[!CSP3]], and request processing from [[!FETCH]]. Explicit-manifest
+        retrieval is also subject to [[!LOCAL-NETWORK-ACCESS]].
       </p>
 
       <p>
@@ -387,7 +395,7 @@ await navigator.install({
       <dl>
         <dt><dfn data-export="">installation succeeded</dfn></dt>
         <dd>
-          The user agent completed installation, or completed a
+          The user agent completed installation, or completed processing a
           user-approved action for an already-installed application.
         </dd>
 
@@ -538,9 +546,18 @@ await navigator.install({
         <li>Let <var>candidate</var> be <var>candidateResult</var>.</li>
         <li>
           If <var>document</var> is no longer an
-          [=eligible initiating document=], return the result of
-          [=finish a web install request=] with <var>request</var>
-          and [=installation aborted=].
+          [=eligible initiating document=]:
+          <ol>
+            <li>
+              If <var>traversable</var>'s
+              [=top-level traversable/active web install request=] is
+              <var>request</var>, set it to null.
+            </li>
+            <li>
+              Return the result of [=finish a web install request=] with
+              <var>request</var> and [=installation aborted=].
+            </li>
+          </ol>
         </li>
         <li>
           Let <var>permissionGranted</var> be the result of
@@ -820,6 +837,32 @@ await navigator.install({
             <a data-cite="fetch#cors-check">CORS check</a> to succeed.
           </li>
           <li>
+            The retrieval MUST comply with the
+            <a data-cite="CSP3#directive-manifest-src">
+            <code>manifest-src</code> directive</a> of the Content Security
+            Policy applicable to the [=initiating document=].
+          </li>
+          <li>
+            The retrieval MUST NOT be intercepted by a service worker.
+          </li>
+          <li>
+            The retrieval MUST be subject to
+            <a data-cite=
+              "!LOCAL-NETWORK-ACCESS#local-network-access-check">
+            Local Network Access checks</a> as if it were initiated by the
+            [=initiating document=].
+          </li>
+          <li>
+            If the retrieval uses cached data, it MUST use the
+            [=network partition key=] associated with the
+            [=initiating document=]'s [=relevant settings object=].
+          </li>
+          <li>
+            The information observable by the [=initiating document=] as a
+            result of this retrieval is limited as described in
+            <a href="#privacy">Privacy considerations</a>.
+          </li>
+          <li>
             If the retrieval encounters a redirect, return failure.
           </li>
           <li>
@@ -830,8 +873,9 @@ await navigator.install({
             [=ok status=], return failure.
           </li>
           <li>
-            The user agent MUST NOT reject <var>response</var> solely because
-            of its MIME type.
+            If <var>response</var>'s <code>Content-Type</code> metadata is not a
+            <a data-cite="mimesniff#json-mime-type">JSON MIME type</a>, return
+            failure.
           </li>
           <li>
             Let <var>bodyBytes</var> be the result of
@@ -851,9 +895,8 @@ await navigator.install({
           The steps above describe the intended network and exposure behavior
           directly. Chromium implements them using an internal browser-process
           request. This draft does not yet define the request destination,
-          response tainting model, service-worker interception, cache
-          partitioning, CSP integration, or Private Network Access integration.
-          These details require coordination with Fetch before advancement.
+          or response tainting model. These details require coordination with
+          Fetch before advancement.
         </p>
 
         <p>
@@ -1829,8 +1872,8 @@ dictionary InstallResultEventInit : EventInit {
             <tr>
               <td><code>success</code></td>
               <td>
-                Installation, or a user-approved action for an existing
-                application, succeeded.
+                Installation completed, or processing of a user-approved action
+                for an existing application completed.
               </td>
             </tr>
             <tr>
@@ -2019,8 +2062,28 @@ dictionary InstallResultEventInit : EventInit {
       </p>
 
       <p>
-        Success means that the user accepted an installation or an action for an
-        existing application. It does not reveal which case occurred. A later
+        Explicit-manifest retrieval does not require the target origin to opt in
+        through CORS. The [=initiating document=] MUST NOT receive the response,
+        manifest contents, or individual results of retrieval, parsing,
+        identity, or metadata validation. It may observe only that processing
+        produced [=invalid install data=], or that the candidate passed
+        validation and processing continued to a user-mediated step.
+      </p>
+
+      <p>
+        [=Invalid install data=] MUST NOT distinguish among a network failure,
+        an unsuccessful HTTP response, a redirect, a body-read failure, a
+        manifest-processing failure, an identity failure, or a
+        required-metadata validation failure. If processing continues, the
+        [=initiating document=] may infer that the manifest was processed as a
+        valid [=web install candidate=] and that any supplied
+        [=manifest ID assertion=] matched.
+      </p>
+
+      <p>
+        Success means that installation completed, or that the user accepted an
+        action for an existing application and the user agent completed
+        processing that action. It does not reveal which case occurred. A later
         uninstall is not observable through this API.
       </p>
 
@@ -2156,8 +2219,9 @@ dictionary InstallResultEventInit : EventInit {
           and icon combinations;
         </li>
         <li>
-          Fetch mode, credentials, redirects, MIME types, referrers, cookies,
-          and service-worker interception;
+          Fetch mode, credentials, redirects, JSON and non-JSON MIME types,
+          missing <code>Content-Type</code> metadata, referrers, cookies, and
+          service-worker interception;
         </li>
         <li>
           explicit and computed identity, including member-presence checks;
